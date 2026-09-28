@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#020617">
+<title>Agenda financiera móvil</title>
+<script>try{var t=localStorage.getItem('agenda-tema');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+:root{color-scheme:dark;--bg:#020617;--fg:#f1f5f9;--card:#0f172a;--field:#1e293b;--muted:#94a3b8;--dim:#64748b;--green:#6ee7b7;--red:#fda4af;--acc:#34d399;--onacc:#03130e;--pill:#ffffff33;--sh:#0005}
+@media(prefers-color-scheme:light){:root:not([data-theme]){color-scheme:light;--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--field:#e2e8f0;--muted:#64748b;--dim:#64748b;--green:#047857;--red:#be123c;--acc:#10b981;--onacc:#03130e;--pill:#ffffff55;--sh:#0f172a22}}
+:root[data-theme=light]{color-scheme:light;--bg:#f1f5f9;--fg:#0f172a;--card:#fff;--field:#e2e8f0;--muted:#64748b;--dim:#64748b;--green:#047857;--red:#be123c;--acc:#10b981;--onacc:#03130e;--pill:#ffffff55;--sh:#0f172a22}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.app{max-width:480px;margin:auto;padding:18px 12px 48px}
+.head{display:flex;gap:12px;align-items:center;margin:6px 0 8px}
+.logo{font-size:28px;background:#10b98122;padding:10px;border-radius:16px}
+.muted{color:var(--muted);font-size:12px}
+h1,h2,h3,p{margin:0}
+.chip{text-align:right;margin:0 4px 12px}
+.balance{background:linear-gradient(135deg,#34d399,#0d9488);color:#02120d;border-radius:24px;padding:20px;box-shadow:0 15px 40px var(--sh)}
+.big{font-size:36px;font-weight:900;margin:4px 0 18px}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pill,.card{background:var(--card);border-radius:24px;padding:16px}
+.pill{background:var(--pill)}
+.card{margin-top:14px;box-shadow:0 1px 2px var(--sh)}
+.nav{display:flex;justify-content:space-between;align-items:center;text-align:center}
+.nav button,.reset,.ico,.btn{border:0;background:var(--field);color:var(--fg);border-radius:14px;padding:11px 15px;font-size:18px;cursor:pointer}
+.ico{margin-left:auto}
+.btn{font-size:14px;flex:1}
+.days,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;text-align:center}
+.days{color:var(--dim);font-size:12px;margin:16px 0 8px}
+.day{border:0;background:var(--field);color:var(--fg);aspect-ratio:1;border-radius:12px;position:relative}
+.day.sel{background:var(--acc);color:var(--onacc);font-weight:800}
+.dot{width:5px;height:5px;border-radius:50%;background:#f59e0b;position:absolute;bottom:4px;left:calc(50% - 2px)}
+textarea,input{width:100%;border:0;outline:0;background:var(--field);color:var(--fg);border-radius:15px;padding:12px;font:inherit}
+textarea::placeholder,input::placeholder{color:var(--muted)}
+textarea{min-height:90px;resize:vertical}
+.week{margin-top:16px}
+.weektop,.totals{display:flex;justify-content:space-between;margin-bottom:6px}
+.totals{font-size:12px;margin-top:5px}
+.green{color:var(--green)}.red{color:var(--red)}
+.row{display:flex;gap:8px}.row input{flex:1}
+.hint{font-size:12px;color:var(--muted);margin:5px 0 10px}
+.err{color:var(--red);font-size:12px;min-height:16px;margin-top:8px}
+#gate{position:fixed;inset:0;background:var(--bg);z-index:9;display:flex;padding:18px;overflow:auto}
+#gate[hidden]{display:none}
+#gate .card{max-width:440px;margin:auto;width:100%}
+</style>
+</head>
+<body>
+<div id="gate" hidden><div class="card"><h2>Código familiar</h2><div class="hint">Escribe un código de 12 a 60 letras o números (sin espacios). Tú y tu esposa deben usar <b>el mismo código</b>: es la llave de sus datos. Anótalo, lo necesitarás en cada teléfono.</div><input id="codigo" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="ej. k7m2qx9v4tb8n3wz5hpr"><div class="row" style="margin-top:10px"><button class="btn" id="gen">Generar uno</button><button class="btn" id="entrar">Entrar</button></div><div class="err" id="gateErr"></div></div></div>
+<main class="app">
+<div class="head"><div class="logo">💳</div><div><div class="muted">MI AGENDA</div><h1>Balance personal</h1></div><button class="ico" id="theme" aria-label="Cambiar entre modo día y noche"></button></div>
+<div class="chip muted" id="sync">☁️ Conectando…</div>
+<section class="card" id="recordatorio" hidden style="margin:0 0 14px"><h3>Respaldo</h3><div class="hint">Hace tiempo que no descargas una copia de tus datos.</div><div class="row"><button class="btn" id="recAhora">Exportar ahora</button><button class="btn" id="recLuego">Después</button></div></section>
+<section class="balance"><div>Balance actual</div><div class="big" id="balance"></div><div class="twocol"><div class="pill">Ingresos<br><b id="income"></b></div><div class="pill">Gastos<br><b id="expenses"></b></div></div></section>
+<section class="card"><div class="nav"><button id="prev" aria-label="Mes anterior">‹</button><div><h2 id="monthTitle"></h2><div class="muted" id="openingLabel"></div></div><button id="next" aria-label="Mes siguiente">›</button></div><div class="days"><span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span></div><div class="grid" id="calendar"></div></section>
+<section class="card"><h3 id="dayTitle"></h3><div class="hint">Notas, citas y recordatorios del día</div><textarea id="dayNote" placeholder="Cita, pendiente, recordatorio..."></textarea><div class="hint">Se guarda solo y se sincroniza con tus otros dispositivos.</div></section>
+<section class="card"><h3>Notas financieras por semana</h3><div class="hint">Solo cuentan cantidades con signo, por ejemplo: -300 Agua o +5000 Nómina.</div><div id="weeks"></div></section>
+<section class="card"><h3>Balance inicial del mes</h3><div class="hint">Déjalo vacío para utilizar automáticamente el cierre del mes anterior.</div><div class="row"><input id="opening" inputmode="decimal" type="number" step="0.01"><button class="reset" id="reset" aria-label="Usar cierre del mes anterior">↻</button></div><div class="hint" id="prevClose"></div></section>
+<section class="card"><h3>Respaldo</h3><div class="hint">Descarga una copia de tus datos o restaura una anterior.</div><div class="row"><button class="btn" id="export">Exportar</button><button class="btn" id="import">Importar</button></div><input id="file" type="file" accept="application/json" hidden></section>
+<section class="card"><h3>Sincronización</h3><div class="hint">Código familiar: <b id="codigoTxt"></b></div><div class="row"><button class="btn" id="verCod">Mostrar</button><button class="btn" id="copiarCod">Copiar</button><button class="btn" id="cambiarCod">Cambiar</button></div></section>
+</main>
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import{initializeFirestore,getFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,onSnapshot}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+const firebaseConfig={apiKey:"AIzaSyAxQS2PE8c0tht1cRXwqiAXDaVJx0_Hlsg",authDomain:"agenda-familiar-93a98.firebaseapp.com",projectId:"agenda-familiar-93a98",storageBucket:"agenda-familiar-93a98.firebasestorage.app",messagingSenderId:"892107270235",appId:"1:892107270235:web:e1c436af5d03862990777e"};
+const app=initializeApp(firebaseConfig);
+
+const months=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const fmt=new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:2});
+const E={};['theme','sync','recordatorio','recAhora','recLuego','balance','income','expenses','prev','next','monthTitle','openingLabel','calendar','dayTitle','dayNote','weeks','opening','reset','prevClose','export','import','file','gate','codigo','gen','entrar','gateErr','codigoTxt','verCod','copiarCod','cambiarCod'].forEach(i=>E[i]=document.getElementById(i));
+const ls={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+
+// data[YYYY-MM] = {openingOverride, weeklyNotes:{1..6}, dayNotes:{dia}}
+let data={},code=ls.get('agenda-codigo')||'',db,pend={},timer=null,pendingWrites=false,errMsg='';
+let now=new Date(),y=now.getFullYear(),m=now.getMonth(),sel=now.getDate();
+const mk=(y,m)=>y+'-'+String(m+1).padStart(2,'0');
+const norm1=(d={})=>({openingOverride:d.openingOverride??'',weeklyNotes:{...(d.weeklyNotes||{})},dayNotes:{...(d.dayNotes||{})}});
+const ensure=(k=mk(y,m))=>data[k]||(data[k]=norm1());
+const mg=(a,b)=>{for(const k in b){if(b[k]&&typeof b[k]==='object')a[k]=mg(a[k]||{},b[k]);else a[k]=b[k]}return a};
+
+function parse(t=''){let i=0,e=0,r=/(^|\s)([+-])\s*\$?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)(?=\s|$)/g,x;while((x=r.exec(t))){let v=Number(x[3].replace(/,/g,''));if(x[2]==='+')i+=v;else e+=v}return{income:i,expenses:e,net:i-e}}
+function tot(s){return Object.values((s&&s.weeklyNotes)||{}).reduce((a,t)=>{const q=parse(t);return{income:a.income+q.income,expenses:a.expenses+q.expenses}},{income:0,expenses:0})}
+function openingOf(yy,mm){const k=mk(yy,mm),s=data[k];if(s&&s.openingOverride!==''&&s.openingOverride!=null)return Number(s.openingOverride)||0;const first=Object.keys(data).sort()[0];if(!first||k<=first)return 0;const d=new Date(yy,mm-1,1);return closeOf(d.getFullYear(),d.getMonth())}
+function closeOf(yy,mm){const t=tot(data[mk(yy,mm)]);return openingOf(yy,mm)+t.income-t.expenses}
+const sgn=n=>(n>=0?'+':'')+fmt.format(n);
+
+// ---------- Sincronización ----------
+function paintSync(){E.sync.textContent=errMsg?'⚠️ Error: '+errMsg:!navigator.onLine?'📴 Sin conexión (se guardará al volver)':(timer||pendingWrites)?'⏳ Guardando…':'☁️ Sincronizado'}
+addEventListener('online',paintSync);addEventListener('offline',paintSync);
+const ref=k=>doc(db,'agendas',code,'meses',k);
+function push(k,part){pend[k]=mg(pend[k]||{},part);clearTimeout(timer);timer=setTimeout(flush,700);paintSync()}
+function flush(){timer=null;const p=pend;pend={};for(const k in p)setDoc(ref(k),p[k],{merge:true}).then(()=>{errMsg='';paintSync()}).catch(e=>{errMsg=e.code||'al guardar';paintSync()});paintSync()}
+function start(){
+ try{db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}catch(e){db=getFirestore(app)}
+ onSnapshot(collection(db,'agendas',code,'meses'),{includeMetadataChanges:true},snap=>{
+  pendingWrites=snap.metadata.hasPendingWrites;
+  snap.docChanges().forEach(c=>{if(c.type==='removed')delete data[c.doc.id];else data[c.doc.id]=norm1(c.doc.data())});
+  for(const k in pend)data[k]=mg(data[k]||norm1(),pend[k]);
+  refreshFields();paintSync();
+ },e=>{errMsg=e.code||'sincronización';paintSync()});
+ paintSync();
+}
+
+// ---------- Pantalla ----------
+function weekView(box,text){const t=parse(text),n=box.querySelector('.net');n.textContent=sgn(t.net);n.className='net '+(t.net>=0?'green':'red');box.querySelector('.ti').textContent='+'+fmt.format(t.income);box.querySelector('.te').textContent='-'+fmt.format(t.expenses)}
+function update(){const t=tot(data[mk(y,m)]),ini=openingOf(y,m),pd=new Date(y,m-1,1);E.balance.textContent=fmt.format(ini+t.income-t.expenses);E.income.textContent='+'+fmt.format(t.income);E.expenses.textContent='-'+fmt.format(t.expenses);E.openingLabel.textContent='Balance inicial: '+fmt.format(ini);E.prevClose.textContent='Cierre calculado del mes anterior: '+fmt.format(closeOf(pd.getFullYear(),pd.getMonth()))}
+function renderCal(){E.calendar.innerHTML='';const dn=(data[mk(y,m)]||{}).dayNotes||{},first=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate();for(let z=0;z<first;z++)E.calendar.append(document.createElement('div'));for(let d=1;d<=n;d++){const b=document.createElement('button');b.className='day'+(d===sel?' sel':'');b.textContent=d;if(dn[d]){const dot=document.createElement('i');dot.className='dot';b.append(dot)}b.onclick=()=>{sel=d;renderCal();renderDay()};E.calendar.append(b)}}
+function renderDay(){E.dayTitle.textContent=sel+' de '+months[m];E.dayNote.value=((data[mk(y,m)]||{}).dayNotes||{})[sel]||''}
+function renderWeeks(){const k=mk(y,m),notes=(data[k]||{}).weeklyNotes||{};E.weeks.innerHTML='';for(let w=1;w<=6;w++){const box=document.createElement('div');box.className='week';box.innerHTML=`<div class="weektop"><b>Semana ${w}</b><span class="net"></span></div><textarea placeholder="-300 Agua\n+5000 Nómina\nDentista martes"></textarea><div class="totals"><span class="green ti"></span><span class="red te"></span></div>`;const ta=box.querySelector('textarea');ta.value=notes[w]||'';weekView(box,ta.value);ta.oninput=()=>{ensure(k).weeklyNotes[w]=ta.value;push(k,{weeklyNotes:{[w]:ta.value}});weekView(box,ta.value);update()};E.weeks.append(box)}}
+function renderMonth(){E.monthTitle.textContent=months[m]+' '+y;E.opening.value=(data[mk(y,m)]||{}).openingOverride||'';renderCal();renderDay();renderWeeks();update()}
+// Refresca sin tocar el campo que se está escribiendo
+function refreshFields(){const s=data[mk(y,m)]||{},w=s.weeklyNotes||{},ae=document.activeElement;if(ae!==E.opening)E.opening.value=s.openingOverride||'';E.weeks.querySelectorAll('.week').forEach((box,i)=>{const ta=box.querySelector('textarea'),v=w[i+1]||'';if(ae!==ta&&ta.value!==v)ta.value=v;weekView(box,ta.value)});const dn=(s.dayNotes||{})[sel]||'';if(ae!==E.dayNote)E.dayNote.value=dn;renderCal();update()}
+function go(delta){const d=new Date(y,m+delta,1);y=d.getFullYear();m=d.getMonth();sel=1;renderMonth()}
+
+E.prev.onclick=()=>go(-1);E.next.onclick=()=>go(1);
+E.dayNote.oninput=()=>{const k=mk(y,m),v=E.dayNote.value;ensure(k).dayNotes[sel]=v;push(k,{dayNotes:{[sel]:v}});renderCal()};
+E.opening.oninput=()=>{const k=mk(y,m),v=E.opening.value;ensure(k).openingOverride=v;push(k,{openingOverride:v});update()};
+E.reset.onclick=()=>{const k=mk(y,m);ensure(k).openingOverride='';E.opening.value='';push(k,{openingOverride:''});update()};
+
+// ---------- Respaldo ----------
+const LK='agenda-respaldo';let last=Number(ls.get(LK)||0);if(!last){last=Date.now();ls.set(LK,last)}
+if(Date.now()-last>14*864e5)E.recordatorio.hidden=false;
+E.recAhora.onclick=()=>E.export.click();
+E.recLuego.onclick=()=>{ls.set(LK,Date.now()-7*864e5);E.recordatorio.hidden=true};
+E.export.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({v:2,meses:data},null,2)],{type:'application/json'}));a.download='agenda-respaldo-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);ls.set(LK,Date.now());E.recordatorio.hidden=true};
+function normalize(o){const src=o.meses||o,out={};for(const k in src)if(/^\d{4}-\d{2}$/.test(k))out[k]=norm1(src[k]);if(!o.meses&&o.dayNotes)for(const k in o.dayNotes){const mo=k.slice(0,7);(out[mo]=out[mo]||norm1()).dayNotes[String(Number(k.slice(8)))]=o.dayNotes[k]}return out}
+E.import.onclick=()=>E.file.click();
+E.file.onchange=async()=>{const f=E.file.files[0];if(!f)return;try{const o=JSON.parse(await f.text()),out=normalize(o);if(!Object.keys(out).length)throw 0;if(!confirm('Esto reemplazará los meses incluidos en el respaldo, también en la nube. ¿Continuar?'))return;for(const k in out){data[k]=out[k];setDoc(ref(k),out[k]).catch(e=>{errMsg=e.code||'al importar';paintSync()})}renderMonth()}catch(e){alert('El archivo no es un respaldo válido.')}E.file.value=''};
+
+// ---------- Código familiar ----------
+let shown=false;const showCode=()=>E.codigoTxt.textContent=shown?code:'••••••••';
+E.verCod.onclick=()=>{shown=!shown;E.verCod.textContent=shown?'Ocultar':'Mostrar';showCode()};
+E.copiarCod.onclick=()=>navigator.clipboard.writeText(code).then(()=>{E.copiarCod.textContent='¡Copiado!';setTimeout(()=>E.copiarCod.textContent='Copiar',1500)}).catch(()=>prompt('Copia tu código:',code));
+E.cambiarCod.onclick=()=>{if(confirm('Se pedirá un código en este teléfono. Tus datos siguen guardados en la nube con el código actual. ¿Continuar?')){try{localStorage.removeItem('agenda-codigo')}catch(e){}location.reload()}};
+E.gen.onclick=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';E.codigo.value=[...crypto.getRandomValues(new Uint8Array(20))].map(n=>a[n%a.length]).join('')};
+E.entrar.onclick=()=>{const c=E.codigo.value.trim();if(!/^[A-Za-z0-9_-]{12,60}$/.test(c)){E.gateErr.textContent='Usa de 12 a 60 letras o números, sin espacios.';return}code=c;ls.set('agenda-codigo',c);E.gate.hidden=true;showCode();start()};
+
+// ---------- Modo día / noche ----------
+const root=document.documentElement,meta=document.querySelector('meta[name=theme-color]'),mq=matchMedia('(prefers-color-scheme: light)');
+const isDark=()=>root.dataset.theme?root.dataset.theme==='dark':!mq.matches;
+function paintTheme(){const d=isDark();E.theme.textContent=d?'☀️':'🌙';E.theme.title=d?'Cambiar a modo día':'Cambiar a modo noche';meta.content=d?'#020617':'#f1f5f9'}
+E.theme.onclick=()=>{const t=isDark()?'light':'dark';root.dataset.theme=t;ls.set('agenda-tema',t);paintTheme()};
+mq.addEventListener('change',paintTheme);
+
+paintTheme();showCode();renderMonth();
+if(code)start();else{E.sync.textContent='';E.gate.hidden=false}
+</script></body></html>
